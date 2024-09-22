@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 #endif
 
-namespace DataVault;
+namespace DataVault.Core.Algorithm;
 
 #if VECTORIZE
 using _Vector = Vector256;

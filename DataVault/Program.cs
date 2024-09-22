@@ -1,12 +1,14 @@
-﻿using System.Runtime.InteropServices;
+﻿using DataVault.Core;
+using DataVault.Core.Algorithm;
+using System.Runtime.InteropServices;
 
 namespace DataVault;
 
+using static Constants;
+
 internal static class Program
 {
-    private static readonly int PARITY_SIZE = 4096;
-
-    static async Task<int> Main(string[] args)
+    static int Main(string[] args)
     {
         if (args.Length != 1)
         {
@@ -15,10 +17,14 @@ internal static class Program
         }
         var fileName = args[0];
 
-        var buffer = new byte[PARITY_SIZE * 2];
+        var start = DateTime.Now;
 
-        var pBuffer = new byte[PARITY_SIZE];
-        var qBuffer = new byte[PARITY_SIZE];
+        Span<byte> buffer = stackalloc byte[PARITY_SIZE * 2];
+        var a = buffer[..PARITY_SIZE];
+        var b = buffer[PARITY_SIZE..];
+
+        Span<byte> p = stackalloc byte[PARITY_SIZE];
+        Span<byte> q = stackalloc byte[PARITY_SIZE];
 
         byte[] createSizeBytes(long size)
         {
@@ -32,7 +38,8 @@ internal static class Program
             return _size[0];
         }
 
-        async Task<int> encode()
+        var exists = File.Exists(fileName);
+        if (exists)
         {
             using var input = File.OpenRead(fileName);
 
@@ -44,53 +51,29 @@ internal static class Program
             var inputInfo = new FileInfo(fileName);
             var sizeBytes = createSizeBytes(inputInfo.Length);
 
-            await Task.WhenAll(
-                outputA.WriteAsync(sizeBytes, 0, sizeBytes.Length),
-                outputB.WriteAsync(sizeBytes, 0, sizeBytes.Length),
-                outputP.WriteAsync(sizeBytes, 0, sizeBytes.Length),
-                outputQ.WriteAsync(sizeBytes, 0, sizeBytes.Length)
-                );
+            outputA.Write(sizeBytes);
+            outputB.Write(sizeBytes);
+            outputP.Write(sizeBytes);
+            outputQ.Write(sizeBytes);
 
             for (;;)
             {
-                var readCount = await input.ReadAsync(buffer);
+                var readCount = input.Read(buffer);
                 if (readCount == 0)
                 {
                     break;
                 }
-                
-                await Task.WhenAll(
 
-                    outputA.WriteAsync(buffer, 0, PARITY_SIZE),
-                    outputB.WriteAsync(buffer, PARITY_SIZE, PARITY_SIZE),
+                outputA.Write(a);
+                outputB.Write(b);
 
-                    Task.Run(async () =>
-                    {
-                        Parity.CalculateP(
-                            buffer.AsSpan(0, PARITY_SIZE),
-                            buffer.AsSpan(PARITY_SIZE, PARITY_SIZE),
-                            pBuffer);
+                Parity.CalculateP(a, b, p);
+                outputP.Write(p);
 
-                        await outputP.WriteAsync(pBuffer);
-                    }),
-
-                    Task.Run(async () =>
-                    {
-                        Parity.CalculateQ(
-                            buffer.AsSpan(0, PARITY_SIZE),
-                            buffer.AsSpan(PARITY_SIZE, PARITY_SIZE),
-                            qBuffer);
-
-                        await outputQ.WriteAsync(qBuffer);
-                    })
-
-                    );
+                Parity.CalculateQ(a, b, q);
+                outputQ.Write(q);
             }
-
-            return 0;
-        }
-
-        async Task<int> restore()
+        } else
         {
             using var output = File.Create(fileName);
 
@@ -138,7 +121,7 @@ internal static class Program
                 foreach (var _input in new[] { inputA, inputB, inputP, inputQ }
                     .Where((it) => it is not null))
                 {
-                    await _input!.ReadAsync(sizeBytes);
+                    _input!.Read(sizeBytes);
                     if (size != -1L & size != (size = createSize(sizeBytes)))
                     {
                         throw new Exception("File parts disagree on size");
@@ -148,7 +131,7 @@ internal static class Program
                 foreach (var _output in new[] { outputA, outputB, outputP, outputQ }
                     .Where((it) => it is not null))
                 {
-                    await _output!.WriteAsync(sizeBytes);
+                    _output!.Write(sizeBytes);
                 }
             }
 
@@ -156,19 +139,19 @@ internal static class Program
             {
                 if (aExists)
                 {
-                    await inputA!.ReadAsync(buffer.AsMemory(0, PARITY_SIZE));
+                    inputA!.Read(a);
                 }
                 if (bExists)
                 {
-                    await inputB!.ReadAsync(buffer.AsMemory(PARITY_SIZE, PARITY_SIZE));
+                    inputB!.Read(b);
                 }
                 if (pExists)
                 {
-                    await inputP!.ReadAsync(pBuffer);
+                    inputP!.Read(p);
                 }
                 if (qExists)
                 {
-                    await inputQ!.ReadAsync(qBuffer);
+                    inputQ!.Read(q);
                 }
 
                 if (aExists && bExists)
@@ -176,39 +159,21 @@ internal static class Program
                     // Lucky you
                 } else if (aExists && pExists)
                 {
-                    Parity.RestoreBFromAAndP(
-                        buffer.AsSpan(0, PARITY_SIZE),
-                        pBuffer,
-                        buffer.AsSpan(PARITY_SIZE, PARITY_SIZE));
+                    Parity.RestoreBFromAAndP(a, p, b);
                 } else if (bExists && pExists)
                 {
-                    Parity.RestoreAFromBAndP(
-                        buffer.AsSpan(PARITY_SIZE, PARITY_SIZE),
-                        pBuffer,
-                        buffer.AsSpan(0, PARITY_SIZE));
+                    Parity.RestoreAFromBAndP(b, p, a);
                 } else if (aExists && qExists)
                 {
-                    Parity.RestoreBFromAAndQ(
-                        buffer.AsSpan(0, PARITY_SIZE),
-                        qBuffer,
-                        buffer.AsSpan(PARITY_SIZE, PARITY_SIZE));
+                    Parity.RestoreBFromAAndQ(a, q, b);
                 } else if (bExists && qExists)
                 {
-                    Parity.RestoreAFromBAndQ(
-                        buffer.AsSpan(PARITY_SIZE, PARITY_SIZE),
-                        qBuffer,
-                        buffer.AsSpan(0, PARITY_SIZE));
+                    Parity.RestoreAFromBAndQ(b, q, a);
                 } else if (pExists && qExists)
                 {
-                    Parity.RestoreBFromPAndQ(
-                        pBuffer,
-                        qBuffer,
-                        buffer.AsSpan(PARITY_SIZE, PARITY_SIZE));
+                    Parity.RestoreBFromPAndQ(p, q, b);
 
-                    Parity.RestoreAFromBAndP(
-                        buffer.AsSpan(PARITY_SIZE, PARITY_SIZE),
-                        pBuffer,
-                        buffer.AsSpan(0, PARITY_SIZE));
+                    Parity.RestoreAFromBAndP(b, p, a);
                 } else
                 {
                     Console.Error.WriteLine("He's dead, Jim");
@@ -217,49 +182,32 @@ internal static class Program
 
                 if (!aExists)
                 {
-                    await outputA!.WriteAsync(buffer.AsMemory(0, PARITY_SIZE));
+                    outputA!.Write(a);
                 }
                 if (!bExists)
                 {
-                    await outputB!.WriteAsync(buffer.AsMemory(PARITY_SIZE, PARITY_SIZE));
+                    outputB!.Write(b);
                 }
                 if (!pExists)
                 {
-                    Parity.CalculateP(
-                        buffer.AsSpan(0, PARITY_SIZE),
-                        buffer.AsSpan(PARITY_SIZE, PARITY_SIZE),
-                        pBuffer);
-
-                    await outputP!.WriteAsync(pBuffer);
+                    Parity.CalculateP(a, b, p);
+                    outputP!.Write(p);
                 }
                 if (!qExists)
                 {
-                    Parity.CalculateQ(
-                        buffer.AsSpan(0, PARITY_SIZE),
-                        buffer.AsSpan(PARITY_SIZE, PARITY_SIZE),
-                        qBuffer);
-
-                    await outputQ!.WriteAsync(qBuffer);
+                    Parity.CalculateQ(a, b, q);
+                    outputQ!.Write(q);
                 }
 
                 // Result will always be within a 32-bit value
-                var writeCount = (int)Math.Min(PARITY_SIZE * 2, size - bytesRestored);
-                await output.WriteAsync(buffer.AsMemory(0, writeCount));
+                var writeCount = (int)Math.Min(buffer.Length, size - bytesRestored);
+                output.Write(buffer[..writeCount]);
             }
-
-            return 0;
         }
 
-        var start = DateTime.Now;
-
-        var exists = File.Exists(fileName);
-        var exitCode = exists 
-            ? await encode()
-            : await restore();
-
         var runtime = DateTime.Now - start;
-        Console.WriteLine(runtime.TotalMilliseconds.ToString("#,##0.00") + "ms");
+        Console.WriteLine($"{runtime.TotalMilliseconds:#,##0.00}ms");
 
-        return exitCode;
+        return 0;
     }
 }
