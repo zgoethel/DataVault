@@ -19,12 +19,12 @@ internal static class Program
 
         var start = DateTime.Now;
 
-        Span<byte> buffer = stackalloc byte[PARITY_SIZE * 2];
-        var a = buffer[..PARITY_SIZE];
-        var b = buffer[PARITY_SIZE..];
+        Span<byte> buffer = stackalloc byte[STRIPE_SIZE * 2];
+        var a = buffer[..STRIPE_SIZE];
+        var b = buffer[STRIPE_SIZE..];
 
-        Span<byte> p = stackalloc byte[PARITY_SIZE];
-        Span<byte> q = stackalloc byte[PARITY_SIZE];
+        Span<byte> p = stackalloc byte[STRIPE_SIZE];
+        Span<byte> q = stackalloc byte[STRIPE_SIZE];
 
         byte[] createSizeBytes(long size)
         {
@@ -73,44 +73,60 @@ internal static class Program
                 Parity.CalculateQ(a, b, q);
                 outputQ.Write(q);
             }
+
+            input.Dispose();
+            File.Delete(fileName);
         } else
         {
             using var output = File.Create(fileName);
 
-            var aExists = File.Exists($"{fileName}.a");
-            var bExists = File.Exists($"{fileName}.b");
-            var pExists = File.Exists($"{fileName}.p");
-            var qExists = File.Exists($"{fileName}.q");
+            Stripe provided = default;
+            if (File.Exists($"{fileName}.a"))
+            {
+                provided |= Stripe.A;
+            }
+            if (File.Exists($"{fileName}.b"))
+            {
+                provided |= Stripe.B;
+            }
+            if (File.Exists($"{fileName}.p"))
+            {
+                provided |= Stripe.P;
+            }
+            if (File.Exists($"{fileName}.q"))
+            {
+                provided |= Stripe.Q;
+            }
 
-            if (!aExists && !bExists && !pExists && !qExists)
+            if (provided == default)
             {
                 Console.Error.WriteLine("File not found");
                 return 1;
             }
 
-            using var inputA = aExists
+            using var inputA = provided.HasFlag(Stripe.A)
                 ? File.OpenRead($"{fileName}.a")
                 : null;
-            using var inputB = bExists
+            using var inputB = provided.HasFlag(Stripe.B)
                 ? File.OpenRead($"{fileName}.b")
                 : null;
-            using var inputP = pExists
+            using var inputP = provided.HasFlag(Stripe.P)
                 ? File.OpenRead($"{fileName}.p")
                 : null;
-            using var inputQ = qExists
+            using var inputQ = provided.HasFlag(Stripe.Q)
                 ? File.OpenRead($"{fileName}.q")
                 : null;
 
-            using var outputA = aExists
+            using var outputA = provided.HasFlag(Stripe.A)
                 ? null
                 : File.Create($"{fileName}.a");
-            using var outputB = bExists
+            using var outputB = provided.HasFlag(Stripe.B)
                 ? null
                 : File.Create($"{fileName}.b");
-            using var outputP = pExists
+            using var outputP = provided.HasFlag(Stripe.P)
                 ? null
                 : File.Create($"{fileName}.p");
-            using var outputQ = qExists
+            using var outputQ = provided.HasFlag(Stripe.Q)
                 ? null
                 : File.Create($"{fileName}.q");
 
@@ -122,9 +138,11 @@ internal static class Program
                     .Where((it) => it is not null))
                 {
                     _input!.Read(sizeBytes);
-                    if (size != -1L & size != (size = createSize(sizeBytes)))
+                    if (size != -1L
+                        & size != (size = createSize(sizeBytes)))
                     {
-                        throw new Exception("File parts disagree on size");
+                        Console.Error.WriteLine("File parts disagree on size");
+                        return 1;
                     }
                 }
 
@@ -135,67 +153,46 @@ internal static class Program
                 }
             }
 
-            for (var bytesRestored = 0L; bytesRestored < size; bytesRestored += PARITY_SIZE * 2)
+            for (var bytesRestored = 0L; bytesRestored < size; bytesRestored += buffer.Length)
             {
-                if (aExists)
+                if (provided.HasFlag(Stripe.A))
                 {
                     inputA!.Read(a);
                 }
-                if (bExists)
+                if (provided.HasFlag(Stripe.B))
                 {
                     inputB!.Read(b);
                 }
-                if (pExists)
+                if (provided.HasFlag(Stripe.P))
                 {
                     inputP!.Read(p);
                 }
-                if (qExists)
+                if (provided.HasFlag(Stripe.Q))
                 {
                     inputQ!.Read(q);
                 }
 
-                if (aExists && bExists)
+                var (result, restored) = Parity.TryRestore(provided, a, b, p, q, restoreP: true, restoreQ: true);
+                if (result != RestoreResult.Success)
                 {
-                    // Lucky you
-                } else if (aExists && pExists)
-                {
-                    Parity.RestoreBFromAAndP(a, p, b);
-                } else if (bExists && pExists)
-                {
-                    Parity.RestoreAFromBAndP(b, p, a);
-                } else if (aExists && qExists)
-                {
-                    Parity.RestoreBFromAAndQ(a, q, b);
-                } else if (bExists && qExists)
-                {
-                    Parity.RestoreAFromBAndQ(b, q, a);
-                } else if (pExists && qExists)
-                {
-                    Parity.RestoreBFromPAndQ(p, q, b);
-
-                    Parity.RestoreAFromBAndP(b, p, a);
-                } else
-                {
-                    Console.Error.WriteLine("He's dead, Jim");
+                    Console.Error.WriteLine($"Restoration failed: {result}");
                     return 1;
                 }
 
-                if (!aExists)
+                if (restored.HasFlag(Stripe.A))
                 {
                     outputA!.Write(a);
                 }
-                if (!bExists)
+                if (restored.HasFlag(Stripe.B))
                 {
                     outputB!.Write(b);
                 }
-                if (!pExists)
+                if (restored.HasFlag(Stripe.P))
                 {
-                    Parity.CalculateP(a, b, p);
                     outputP!.Write(p);
                 }
-                if (!qExists)
+                if (restored.HasFlag(Stripe.Q))
                 {
-                    Parity.CalculateQ(a, b, q);
                     outputQ!.Write(q);
                 }
 

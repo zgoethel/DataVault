@@ -12,14 +12,14 @@ using _Vector = Vector256;
 using _VectorT = Vector256<byte>;
 #endif
 
-public static class Parity
+public static partial class Parity
 {
 #if VECTORIZE
-    private static readonly _VectorT EVEN_BITS = _Vector.Create<byte>(0b10101010);
-    private static readonly _VectorT ODD_BITS = _Vector.Create<byte>(0b01010101);
+    private static readonly _VectorT _EVEN_BITS = _Vector.Create<byte>(0b10101010);
+    private static readonly _VectorT _ODD_BITS = _Vector.Create<byte>(0b01010101);
 #else
-    private const byte EVEN_BITS = 0b10101010;
-    private const byte ODD_BITS = 0b01010101;
+    private const byte _EVEN_BITS = 0b10101010;
+    private const byte _ODD_BITS = 0b01010101;
 #endif
 
     public static void CalculateP(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b, Span<byte> p)
@@ -51,16 +51,6 @@ public static class Parity
 #endif
     }
 
-    public static void RestoreAFromBAndP(ReadOnlySpan<byte> b, ReadOnlySpan<byte> p, Span<byte> a)
-    {
-        CalculateP(b, p, a);
-    }
-
-    public static void RestoreBFromAAndP(ReadOnlySpan<byte> a, ReadOnlySpan<byte> p, Span<byte> b)
-    {
-        CalculateP(a, p, b);
-    }
-
     public static void Mangle(ReadOnlySpan<byte> b, Span<byte> mangle)
     {
         if (b.Length != mangle.Length)
@@ -79,8 +69,8 @@ public static class Parity
 
         for (var i = 0; i < bVector.Length; i++)
         {
-            var b0 = _Vector.BitwiseAnd(bVector[i], EVEN_BITS);
-            var b1 = _Vector.BitwiseAnd(bVector[i], ODD_BITS);
+            var b0 = _Vector.BitwiseAnd(bVector[i], _EVEN_BITS);
+            var b1 = _Vector.BitwiseAnd(bVector[i], _ODD_BITS);
 
             var _b0 = _Vector.ShiftRightLogical(b0, 1);
             var _b1 = _Vector.ShiftLeft(b1, 1);
@@ -90,8 +80,8 @@ public static class Parity
 #else
         for (var i = 0; i < b.Length; i++)
         {
-            var b0 = b[i] & EVEN_BITS;
-            var b1 = b[i] & ODD_BITS;
+            var b0 = b[i] & _EVEN_BITS;
+            var b1 = b[i] & _ODD_BITS;
 
             var _b0 = b0 >>> 1;
             var _b1 = b1 << 1;
@@ -111,23 +101,5 @@ public static class Parity
     {
         Mangle(b, q);
         CalculateP(a, q, q);
-    }
-
-    public static void RestoreAFromBAndQ(ReadOnlySpan<byte> b, ReadOnlySpan<byte> q, Span<byte> a)
-    {
-        Mangle(b, a);
-        CalculateP(q, a, a);
-    }
-
-    public static void RestoreBFromAAndQ(ReadOnlySpan<byte> a, ReadOnlySpan<byte> q, Span<byte> b)
-    {
-        CalculateP(a, q, b);
-        Unmangle(b, b);
-    }
-
-    public static void RestoreBFromPAndQ(ReadOnlySpan<byte> p, ReadOnlySpan<byte> q, Span<byte> b)
-    {
-        CalculateP(p, q, b);
-        Mangle(b, b);
     }
 }

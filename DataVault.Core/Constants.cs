@@ -2,5 +2,5 @@
 
 public static class Constants
 {
-    public const int PARITY_SIZE = 4096;
+    public const int STRIPE_SIZE = 4096;
 }
