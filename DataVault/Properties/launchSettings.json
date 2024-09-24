@@ -2,7 +2,6 @@
   "profiles": {
     "DataVault": {
       "commandName": "Project",
-      "commandLineArgs": "test.jpg",
       "workingDirectory": "."
     }
   }
