@@ -4,6 +4,7 @@ using DataVault.Core.Syntax;
 using DataVault.Ef;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace DataVault;
 
@@ -25,6 +26,15 @@ internal static class Program
 
             var builder = Host.CreateApplicationBuilder(args);
 
+            builder.Services.AddLogging((config) =>
+            {
+#if DEBUG
+                config.SetMinimumLevel(LogLevel.Debug);
+#else
+                config.SetMinimumLevel(LogLevel.Information);
+#endif
+            });
+
             builder.Services.AddDbContext<NodeContext>();
 
             builder.Services.AddSingleton<Discovery>();
@@ -38,21 +48,17 @@ internal static class Program
 
             using var app = builder.Build();
 
-            var test = app.Services.GetRequiredService<NodeContext>();
-            if (!test.Identity.Any())
-            {
-                test.Identity.Add(new()
-                {
-                    Id = Guid.NewGuid()
-                });
-            }
-            var me = test.Identity.Single();
+            app.Start();
 
-            app.Run();
+            var db = app.Services.GetRequiredService<NodeContext>();
+            db.Initialize();
+
+            app.WaitForShutdown();
         } catch (Exception ex)
         {
-            Console.Error.WriteLine("Encountered fatal unhandled exception.");
+            Console.Error.WriteLine("Encountered fatal unhandled exception");
             Console.Error.WriteLine(ex.ToString());
+
             return 1;
         }
 
