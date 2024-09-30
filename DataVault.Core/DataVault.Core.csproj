@@ -7,4 +7,8 @@
 	<NoWarn>1701;1702;IDE1006</NoWarn>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="RabbitMQ.Client" Version="6.8.1" />
+  </ItemGroup>
+
 </Project>
