@@ -15,8 +15,8 @@ namespace DataVault;
 
 internal static class Program
 {
-    const string SETTINGS_FILE = "appsettings.json";
-    const string DEFAULT_DATA_DIR = "./data/";
+    public const string SETTINGS_FILE = "appsettings.json";
+    public const string DEFAULT_DATA_DIR = "./data/";
 
     static int Main(string[] args)
     {
@@ -97,8 +97,13 @@ internal static class Program
 
             app.Start();
 
-            var identityRepo = app.Services.GetRequiredService<IdentityRepo>();
-            identityRepo.Initialize();
+            var nodeIdentity = app.Services.GetRequiredService<NodeIdentity>();
+            nodeIdentity.Initialize();
+
+            using var cancel = new CancellationTokenSource();
+
+            var discovery = app.Services.GetRequiredService<Discovery>();
+            discovery.BeginAnnounce();
 
             app.WaitForShutdown();
         } catch (Exception ex)

@@ -24,7 +24,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DataVault.Core\DataVault.Core.csproj" />
-    <ProjectReference Include="..\DataVault.Ef\DataVault.Ef.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="data\" />
   </ItemGroup>
 
 </Project>

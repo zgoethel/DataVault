@@ -1,5 +1,4 @@
 ﻿using DataVault.Ef.Models;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace DataVault.Ef.Repositories;
@@ -8,12 +7,8 @@ public class IdentityRepo(
     ILogger<IdentityRepo> log,
     NodeContext db)
 {
-    public void Initialize()
+    public Identity GetOrCreateIdentity()
     {
-        log.LogInformation("Applying local database migrations");
-
-        db.Database.Migrate();
-
         if (!db.Identities.Any())
         {
             log.LogInformation("Seeding node identity");
@@ -23,6 +18,6 @@ public class IdentityRepo(
         }
         var identity = db.Identities.Single();
 
-        log.LogDebug("Hello, world! from '{}'", identity.Id);
+        return identity;
     }
 }
