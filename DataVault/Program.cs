@@ -1,4 +1,5 @@
 ﻿using DataVault.Core;
+using DataVault.Core.Algorithm;
 using DataVault.Core.Node;
 using DataVault.Core.Queues;
 using DataVault.Core.Syntax;
@@ -18,7 +19,7 @@ internal static class Program
     public const string SETTINGS_FILE = "appsettings.json";
     public const string DEFAULT_DATA_DIR = "./data/";
 
-    static int Main(string[] args)
+    static async Task<int> Main(string[] args)
     {
         if (args.Length > 1)
         {
@@ -40,7 +41,7 @@ internal static class Program
                 using var template = assembly.GetManifestResourceStream($"{assembly.GetName().Name}.{SETTINGS_FILE}")!;
                 using var settingsOut = File.OpenWrite(SETTINGS_FILE);
 
-                template.CopyTo(settingsOut);
+                await template.CopyToAsync(settingsOut);
             }
 
             var builder = Host.CreateApplicationBuilder(args);
@@ -69,6 +70,12 @@ internal static class Program
             builder.Services.AddSingleton((sp) =>
             {
                 var settings = sp.GetRequiredService<AppSettings>();
+
+                var log = sp.GetRequiredService<ILogger<ConnectionFactory>>();
+                log.LogInformation("Connecting to broker at '{}:{}'",
+                    settings.RabbitMQ.HostName,
+                    settings.RabbitMQ.Port);
+
                 var factory = new ConnectionFactory()
                 {
                     HostName = settings.RabbitMQ.HostName,
@@ -78,6 +85,20 @@ internal static class Program
                 };
 
                 return factory.CreateConnection();
+            });
+
+            builder.Services.AddSingleton((sp) =>
+            {
+                var log = sp.GetRequiredService<ILogger<Fsa>>();
+                log.LogInformation("Compiling control syntax tokens");
+
+                var compileStart = DateTime.Now;
+                var grammar = Grammar.CreateDfa();
+                var compileTime = DateTime.Now - compileStart;
+
+                log.LogDebug("Compiled in {:#,##0.00}ms", compileTime.TotalMilliseconds);
+
+                return grammar;
             });
 
             builder.Services.AddDbContext<NodeContext>();
@@ -94,18 +115,24 @@ internal static class Program
             builder.Services.AddSingleton<Grammar>();
 
             using var app = builder.Build();
-
-            app.Start();
+            await app.StartAsync();
 
             var nodeIdentity = app.Services.GetRequiredService<NodeIdentity>();
             nodeIdentity.Initialize();
 
+            var grammar = app.Services.GetRequiredService<Grammar>();
+
             using var cancel = new CancellationTokenSource();
+            var longRunning = new List<Task>();
 
             var discovery = app.Services.GetRequiredService<Discovery>();
-            discovery.BeginAnnounce();
+            longRunning.Add(discovery.BeginListen(cancel.Token));
+            longRunning.Add(discovery.BeginAnnounce(cancel.Token));
 
-            app.WaitForShutdown();
+            await app.WaitForShutdownAsync();
+
+            cancel.Cancel();
+            await Task.WhenAll(longRunning);
         } catch (Exception ex)
         {
             Console.Error.WriteLine("Encountered fatal unhandled exception");

@@ -1,4 +1,4 @@
-﻿namespace DataVault.Core.Syntax.Fsa;
+﻿namespace DataVault.Core.Syntax;
 
 /*
  * Encapsulates a source file and also the current cursor state of the lexer-

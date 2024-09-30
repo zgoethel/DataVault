@@ -1,4 +1,4 @@
-﻿namespace DataVault.Core.Syntax.Fsa;
+﻿namespace DataVault.Core.Syntax;
 
 public partial class Fsa
 {

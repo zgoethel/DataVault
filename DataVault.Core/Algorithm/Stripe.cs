@@ -1,4 +1,4 @@
-﻿namespace DataVault.Core;
+﻿namespace DataVault.Core.Algorithm;
 
 [Flags]
 public enum Stripe
