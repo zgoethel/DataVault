@@ -3,6 +3,7 @@ using DataVault.Core.Node;
 using DataVault.Core.Queues;
 using DataVault.Core.Syntax;
 using DataVault.Ef;
+using DataVault.Ef.Repositories;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -81,6 +82,8 @@ internal static class Program
 
             builder.Services.AddDbContext<NodeContext>();
 
+            builder.Services.AddSingleton<IdentityRepo>();
+
             builder.Services.AddSingleton<Discovery>();
             builder.Services.AddSingleton<NodeIdentity>();
             builder.Services.AddSingleton<PoolTable>();
@@ -94,10 +97,8 @@ internal static class Program
 
             app.Start();
 
-            var db = app.Services.GetRequiredService<NodeContext>();
-            db.Initialize();
-
-            var testRabbit = app.Services.GetRequiredService<IConnection>();
+            var identityRepo = app.Services.GetRequiredService<IdentityRepo>();
+            identityRepo.Initialize();
 
             app.WaitForShutdown();
         } catch (Exception ex)
