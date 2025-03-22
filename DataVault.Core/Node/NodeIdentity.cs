@@ -13,12 +13,14 @@ public class NodeIdentity(
 {
     public Identity Identity { get; private set; } = new();
 
-    public void Initialize()
+    public NodeStatus Status { get; private set; } = NodeStatus.Offline;
+
+    public async Task Initialize()
     {
         log.LogInformation("Applying local database migrations");
         db.Database.Migrate();
 
-        Identity = repo.GetOrCreateIdentity();
+        Identity = await repo.GetOrCreateIdentity();
         log.LogDebug("Hello, world! from '{}'", Identity.Id);
     }
 }

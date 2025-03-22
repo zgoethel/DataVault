@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using System.Reflection;
 
@@ -46,7 +47,7 @@ internal static class Program
 
             var builder = Host.CreateApplicationBuilder(args);
 
-            builder.Configuration.AddJsonFile(SETTINGS_FILE, false, false);
+            builder.Configuration.AddJsonFile(SETTINGS_FILE, false, true);
 
             builder.Services.AddLogging((config) =>
             {
@@ -57,31 +58,30 @@ internal static class Program
 #endif
             });
 
-            builder.Services.AddSingleton((sp) =>
+            /*
+            builder.Services.Configure<AppSettings>((options) =>
             {
-                var config = sp.GetRequiredService<IConfiguration>();
-                var settings = new AppSettings();
-
-                config.GetSection("RabbitMQ").Bind(settings.RabbitMQ);
-
-                return settings;
+                builder.Configuration.Bind(options);
+                builder.Configuration.GetSection("RabbitMQ").Bind(options.RabbitMQ);
             });
+            */
+            builder.Services.Configure<AppSettings>(builder.Configuration);
 
             builder.Services.AddSingleton((sp) =>
             {
-                var settings = sp.GetRequiredService<AppSettings>();
+                var settings = sp.GetRequiredService<IOptions<AppSettings>>();
 
                 var log = sp.GetRequiredService<ILogger<ConnectionFactory>>();
                 log.LogInformation("Connecting to broker at '{}:{}'",
-                    settings.RabbitMQ.HostName,
-                    settings.RabbitMQ.Port);
+                    settings.Value.RabbitMQ.HostName,
+                    settings.Value.RabbitMQ.Port);
 
                 var factory = new ConnectionFactory()
                 {
-                    HostName = settings.RabbitMQ.HostName,
-                    Port = settings.RabbitMQ.Port,
-                    UserName = settings.RabbitMQ.UserName,
-                    Password = settings.RabbitMQ.Password
+                    HostName = settings.Value.RabbitMQ.HostName,
+                    Port = settings.Value.RabbitMQ.Port,
+                    UserName = settings.Value.RabbitMQ.UserName,
+                    Password = settings.Value.RabbitMQ.Password
                 };
 
                 return factory.CreateConnection();
@@ -104,6 +104,7 @@ internal static class Program
             builder.Services.AddDbContext<NodeContext>();
 
             builder.Services.AddSingleton<IdentityRepo>();
+            builder.Services.AddSingleton<PeerRepo>();
 
             builder.Services.AddSingleton<Discovery>();
             builder.Services.AddSingleton<NodeIdentity>();
@@ -118,9 +119,7 @@ internal static class Program
             await app.StartAsync();
 
             var nodeIdentity = app.Services.GetRequiredService<NodeIdentity>();
-            nodeIdentity.Initialize();
-
-            var grammar = app.Services.GetRequiredService<Grammar>();
+            await nodeIdentity.Initialize();
 
             using var cancel = new CancellationTokenSource();
             var longRunning = new List<Task>();

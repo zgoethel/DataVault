@@ -10,5 +10,11 @@ public class RabbitMQSettings
 
 public class AppSettings
 {
+    public string BindAddress { get; set; } = "";
+    public int BindPort { get; set; }
+
+    public string SelfAddress { get; set; } = "";
+    public int SelfPort { get; set; }
+
     public RabbitMQSettings RabbitMQ { get; set; } = new();
 }

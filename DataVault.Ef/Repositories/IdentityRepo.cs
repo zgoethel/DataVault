@@ -7,17 +7,20 @@ public class IdentityRepo(
     ILogger<IdentityRepo> log,
     NodeContext db)
 {
-    public Identity GetOrCreateIdentity()
+    public async Task<Identity> GetOrCreateIdentity()
     {
-        if (!db.Identities.Any())
+        return await db.Run(async () =>
         {
-            log.LogInformation("Seeding node identity");
+            if (!db.Identities.Any())
+            {
+                log.LogInformation("Seeding node identity");
 
-            db.Identities.Add(Identity.FromHost());
-            db.SaveChanges();
-        }
-        var identity = db.Identities.Single();
+                db.Identities.Add(Identity.FromHost());
 
-        return identity;
+                await db.SaveChangesAsync();
+            }
+
+            return db.Identities.Single();
+        });
     }
 }

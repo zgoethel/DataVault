@@ -2,6 +2,6 @@
 
 public enum NodeStatus
 {
-    Ready,
+    Ready = 1,
     Offline
 }

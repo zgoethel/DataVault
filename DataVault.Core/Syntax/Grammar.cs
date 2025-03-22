@@ -9,7 +9,7 @@ public class Grammar(
     {
         var nfa = new Fsa();
 
-        nfa.Build("[ \n\r\t\v\f]*", (int)Discard);
+        nfa.Build("[ \n\r\t\v\f]+", (int)Discard);
 
         var dfa = nfa.ConvertToDfa().MinimizeDfa();
         return dfa;
