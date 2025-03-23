@@ -28,10 +28,11 @@ public class Discovery(
 
     public async Task BeginAnnounce(CancellationToken cancel)
     {
-        using var channel = rabbit.CreateModel();
+        using var channel = await rabbit.CreateChannelAsync();
 
-        channel.ExchangeDeclare(STATUS_EXCHANGE, ExchangeType.Fanout);
-        channel.ConfirmSelect();
+        await channel.ExchangeDeclareAsync(STATUS_EXCHANGE, ExchangeType.Fanout);
+        //TODO What is the replacement for this?
+        //channel.ConfirmSelect();
 
         while (!cancel.IsCancellationRequested)
         {
@@ -48,8 +49,9 @@ public class Discovery(
 
                 log.LogDebug("Sending message: '{}'", message);
 
-                channel.BasicPublish(STATUS_EXCHANGE, "", null, body);
-                channel.WaitForConfirmsOrDie(CONFIRM_TIMEOUT);
+                await channel.BasicPublishAsync(STATUS_EXCHANGE, "", body);
+                //TODO What is the replacement for this?
+                //channel.WaitForConfirmsOrDie(CONFIRM_TIMEOUT);
 
                 log.LogDebug("Sent");
             } catch (Exception ex)
@@ -79,15 +81,15 @@ public class Discovery(
 
     public async Task BeginListen(CancellationToken token)
     {
-        using var channel = rabbit.CreateModel();
+        using var channel = await rabbit.CreateChannelAsync();
 
-        channel.ExchangeDeclare(STATUS_EXCHANGE, ExchangeType.Fanout);
+        await channel.ExchangeDeclareAsync(STATUS_EXCHANGE, ExchangeType.Fanout);
 
-        var queue = channel.QueueDeclare();
-        channel.QueueBind(queue, STATUS_EXCHANGE, "");
+        var queue = await channel.QueueDeclareAsync();
+        await channel.QueueBindAsync(queue, STATUS_EXCHANGE, "");
 
-        var consumer = new EventingBasicConsumer(channel);
-        consumer.Received += async (_, e) =>
+        var consumer = new AsyncEventingBasicConsumer(channel);
+        consumer.ReceivedAsync += async (_, e) =>
         {
             try
             {
@@ -120,10 +122,10 @@ public class Discovery(
                 log.LogDebug(ex, "Failed to receive status update");
             }
         };
-        var consumerTag = channel.BasicConsume(queue, true, consumer);
+        var consumerTag = await channel.BasicConsumeAsync(queue, true, consumer);
 
         await Task.Run(token.WaitHandle.WaitOne);
 
-        channel.BasicCancel(consumerTag);
+        await channel.BasicCancelAsync(consumerTag);
     }
 }

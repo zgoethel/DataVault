@@ -77,7 +77,7 @@ internal static class Program
                     Password = settings.Value.RabbitMQ.Password
                 };
 
-                return factory.CreateConnection();
+                return Task.Run(async () => await factory.CreateConnectionAsync()).Result;
             });
 
             builder.Services.AddSingleton((sp) =>
