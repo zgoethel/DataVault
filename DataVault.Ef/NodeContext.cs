@@ -1,9 +1,12 @@
 ﻿using DataVault.Ef.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DataVault.Ef;
 
-public class NodeContext : DbContext
+public class NodeContext(
+    IServiceProvider sp
+    ) : DbContext
 {
     public const string NODE_DB_FILE = "node.db";
 
@@ -12,8 +15,12 @@ public class NodeContext : DbContext
     public DbSet<Identity> Identities { get; set; }
     public DbSet<Peer> Peers { get; set; }
 
+    private string BasePath => (sp as IKeyedServiceProvider)
+        ?.GetKeyedService<string>("BasePath")
+        ?? "./";
+
     protected override void OnConfiguring(DbContextOptionsBuilder options)
-        => options.UseSqlite($"Data Source={NODE_DB_FILE}");
+        => options.UseSqlite($"Data Source={Path.Combine(BasePath, NODE_DB_FILE)}");
 
     public async Task Run(Func<Task> work)
     {

@@ -22,32 +22,32 @@ internal static class Program
 
     static async Task<int> Main(string[] args)
     {
-        if (args.Length > 1)
-        {
-            Console.Error.WriteLine("Usage: ./DataVault.exe [data_folder]");
-            return 1;
-        }
-        var dataFolder = args.FirstOrDefault(DEFAULT_DATA_DIR);
-
         try
         {
-            Directory.CreateDirectory(dataFolder);
-            Directory.SetCurrentDirectory(dataFolder);
+            if (args.Length > 1)
+            {
+                var results = await Task.WhenAll(args.Select((it) => Main([it])));
+                return results.Any((it) => it != 0) ? 1 : 0;
+            }
 
-            var settingsInfo = new FileInfo(SETTINGS_FILE);
+            var dataFolder = args.FirstOrDefault(DEFAULT_DATA_DIR);
+            Directory.CreateDirectory(dataFolder);
+
+            var settingsPath = Path.Combine(dataFolder, SETTINGS_FILE);
+            var settingsInfo = new FileInfo(settingsPath);
             if (!settingsInfo.Exists || settingsInfo.Length == 0)
             {
                 var assembly = Assembly.GetExecutingAssembly();
 
                 using var template = assembly.GetManifestResourceStream($"{assembly.GetName().Name}.{SETTINGS_FILE}")!;
-                using var settingsOut = File.OpenWrite(SETTINGS_FILE);
+                using var settingsOut = File.OpenWrite(settingsPath);
 
                 await template.CopyToAsync(settingsOut);
             }
 
             var builder = Host.CreateApplicationBuilder(args);
 
-            builder.Configuration.AddJsonFile(SETTINGS_FILE, false, true);
+            builder.Configuration.AddJsonFile(settingsPath, false, true);
 
             builder.Services.AddLogging((config) =>
             {
@@ -58,13 +58,6 @@ internal static class Program
 #endif
             });
 
-            /*
-            builder.Services.Configure<AppSettings>((options) =>
-            {
-                builder.Configuration.Bind(options);
-                builder.Configuration.GetSection("RabbitMQ").Bind(options.RabbitMQ);
-            });
-            */
             builder.Services.Configure<AppSettings>(builder.Configuration);
 
             builder.Services.AddSingleton((sp) =>
@@ -101,6 +94,8 @@ internal static class Program
                 return grammar;
             });
 
+            builder.Services.AddKeyedSingleton("BasePath", dataFolder);
+
             builder.Services.AddDbContext<NodeContext>();
 
             builder.Services.AddSingleton<IdentityRepo>();
@@ -132,6 +127,8 @@ internal static class Program
 
             cancel.Cancel();
             await Task.WhenAll(longRunning);
+
+            return 0;
         } catch (Exception ex)
         {
             Console.Error.WriteLine("Encountered fatal unhandled exception");
@@ -139,7 +136,5 @@ internal static class Program
 
             return 1;
         }
-
-        return 0;
     }
 }

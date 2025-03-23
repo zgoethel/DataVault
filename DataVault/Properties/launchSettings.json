@@ -2,6 +2,7 @@
   "profiles": {
     "DataVault": {
       "commandName": "Project",
+      "commandLineArgs": "./data0/ ./data1/ ./data2/",
       "workingDirectory": "."
     }
   }

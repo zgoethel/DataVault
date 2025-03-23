@@ -18,7 +18,7 @@ public class NodeIdentity(
     public async Task Initialize()
     {
         log.LogInformation("Applying local database migrations");
-        db.Database.Migrate();
+        await db.Database.MigrateAsync();
 
         Identity = await repo.GetOrCreateIdentity();
         log.LogDebug("Hello, world! from '{}'", Identity.Id);
